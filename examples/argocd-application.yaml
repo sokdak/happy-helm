@@ -1,0 +1,34 @@
+# Example ArgoCD Application that deploys this chart via GitOps.
+# Adjust namespace, host/serverUrl, storageClass, project, and the secret name for your cluster.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: happy
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: happy
+  source:
+    repoURL: https://github.com/sokdak/happy-helm.git
+    targetRevision: main
+    path: .
+    helm:
+      values: |
+        image:
+          tag: "2026.06.03"
+        server:
+          serverUrl: https://happy.example.com
+        ingress:
+          host: happy.example.com
+        # persistence:
+        #   storageClass: ceph-block   # pin if your cluster needs a specific class
+        masterSecret:
+          existingSecret: happy-secrets
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

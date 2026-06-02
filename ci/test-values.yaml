@@ -1,0 +1,7 @@
+# Deterministic overrides for `helm template` verification (not used in production).
+image:
+  tag: "test"
+server:
+  serverUrl: https://happy.example.com
+persistence:
+  storageClass: "test-sc"

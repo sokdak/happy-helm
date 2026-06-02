@@ -1,0 +1,10 @@
+.git/
+.gitignore
+docs/
+ci/
+hack/
+docker/
+examples/
+*.md
+/tmp/
+.DS_Store

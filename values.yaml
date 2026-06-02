@@ -1,0 +1,49 @@
+nameOverride: ""
+fullnameOverride: ""
+
+# Image built from docker/Dockerfile, pushed to Docker Hub (public).
+image:
+  repository: docker.io/sokdak/happy
+  tag: latest            # override per release, e.g. "2026.06.03"
+  pullPolicy: IfNotPresent
+
+server:
+  # Canonical external URL. Injected into the served web UI as window.__HAPPY_CONFIG__.serverUrl
+  # and used as the same-origin endpoint for REST + WebSocket. OVERRIDE THIS for your cluster.
+  serverUrl: https://happy.example.com
+  port: 3005
+  extraEnv: []           # e.g. - {name: ELEVENLABS_API_KEY, value: "xxx"}
+
+ingress:
+  enabled: true
+  className: nginx
+  host: happy.example.com
+  clusterIssuer: letsencrypt-prod
+  tlsSecretName: happy-tls
+  whitelistSourceRange: ""        # optional CIDR allowlist, e.g. "10.0.0.0/8"
+  proxyTimeoutSeconds: 3600       # long-lived WebSocket
+
+persistence:
+  enabled: true
+  storageClass: ""                # "" = cluster default StorageClass (set e.g. ceph-block/longhorn to pin)
+  size: 2Gi
+  mountPath: /data
+
+# HANDY_MASTER_SECRET must be created out-of-band (GitOps-safe; never commit it).
+masterSecret:
+  existingSecret: happy-secrets
+  key: HANDY_MASTER_SECRET
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: "1"
+    memory: 1Gi
+
+# Image is arm64-only this iteration; pin scheduling to arm64 nodes unless `affinity` is set.
+nodeArch: arm64
+nodeSelector: {}
+tolerations: []
+affinity: {}

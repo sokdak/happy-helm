@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "happy.fullname" . }}
+  labels:
+    {{- include "happy.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "happy.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "happy.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.nodeArch }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: [{{ .Values.nodeArch | quote }}]
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: happy
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.server.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.server.port | quote }}
+            - name: HOST
+              value: "0.0.0.0"
+            - name: NODE_ENV
+              value: "production"
+            - name: DATA_DIR
+              value: {{ .Values.persistence.mountPath | quote }}
+            - name: PGLITE_DIR
+              value: {{ printf "%s/pglite" .Values.persistence.mountPath | quote }}
+            - name: HAPPY_STATIC_DIR
+              value: "/repo/packages/happy-server/webapp"
+            - name: HAPPY_INJECT_HTML_CONFIG
+              value: {{ printf "{\"serverUrl\":\"%s\"}" .Values.server.serverUrl | quote }}
+            - name: HANDY_MASTER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.masterSecret.existingSecret | quote }}
+                  key: {{ .Values.masterSecret.key | quote }}
+            {{- with .Values.server.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: {{ .Values.persistence.mountPath | quote }}
+      volumes:
+        - name: data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "happy.fullname" . }}-data
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
