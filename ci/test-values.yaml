@@ -1,7 +1,9 @@
 # Deterministic overrides for `helm template` verification (not used in production).
 image:
   tag: "test"
-server:
-  serverUrl: https://happy.example.com
+api:
+  host: api.happy.example.com
+fe:
+  host: happy.example.com
 postgres:
   storageClass: "test-sc"

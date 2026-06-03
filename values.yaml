@@ -7,22 +7,26 @@ image:
   tag: latest            # override per release, e.g. "2026.06.03"
   pullPolicy: IfNotPresent
 
-server:
-  # Canonical external URL. Injected into the served web UI as window.__HAPPY_CONFIG__.serverUrl
-  # and used as the same-origin endpoint for REST + WebSocket. OVERRIDE THIS for your cluster.
-  serverUrl: https://happy.example.com
-  port: 3005
-  extraEnv: []           # e.g. - {name: ELEVENLABS_API_KEY, value: "xxx"}
+# Split-origin deployment (two hosts, same image, shared Postgres):
+#   - api: happy-server relay. Removes the bundled web UI at startup so GET / returns
+#          "Welcome to Happy Server!" — required for native/App-Store apps to register it
+#          as a custom server. Runs `prisma migrate deploy`.
+#   - fe : serves the web UI (static), with the server URL injected to point at the api origin.
+# The browser/CLI talk to the api origin; the fe pod only serves UI (server CORS is `*`).
 
-# Database backing the server.
-#   provider: "postgres" (recommended) — uses a real PostgreSQL (handles Bytes/enum columns correctly).
-#   provider: "pglite"   — embedded, but has Prisma Bytes/enum deserialization bugs that break
-#                          machine/session listing. Not recommended.
+port: 3005
+
+# HANDY_MASTER_SECRET (token signing / per-machine key derivation) — created out-of-band, never committed.
+masterSecret:
+  existingSecret: happy-secrets
+  key: HANDY_MASTER_SECRET
+
+# Database (real PostgreSQL — PGlite has Prisma Bytes/enum bugs that break machine/session listing).
 database:
   provider: postgres
-  existingSecret: happy-postgres   # holds the connection URL + postgres password (create out-of-band)
-  urlKey: database-url             # key: postgresql://user:pass@<release>-postgres:5432/db?schema=public
-  passwordKey: password            # key: the postgres password (for the bundled Postgres)
+  existingSecret: happy-postgres   # holds database-url + password (create out-of-band)
+  urlKey: database-url             # postgresql://happy:<pw>@<release>-postgres:5432/happy?schema=public
+  passwordKey: password
   user: happy
   name: happy
 
@@ -37,26 +41,28 @@ postgres:
     limits:   { cpu: "1",  memory: 1Gi }
 
 ingress:
-  enabled: true
   className: nginx
-  host: happy.example.com
   clusterIssuer: letsencrypt-prod
-  tlsSecretName: happy-tls
-  whitelistSourceRange: ""        # optional CIDR allowlist, e.g. "10.0.0.0/8"
-  proxyTimeoutSeconds: 3600       # long-lived WebSocket
+  whitelistSourceRange: ""         # optional CIDR allowlist, e.g. "10.0.0.0/8"
+  proxyTimeoutSeconds: 3600        # long-lived WebSocket
 
-# HANDY_MASTER_SECRET must be created out-of-band (GitOps-safe; never commit it).
-masterSecret:
-  existingSecret: happy-secrets
-  key: HANDY_MASTER_SECRET
+# ---- API / relay component: GET / -> "Welcome to Happy Server!" (NO web UI) ----
+api:
+  host: api.happy.example.com
+  tlsSecretName: ""                # default: <fullname>-api-tls
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: "1",  memory: 1Gi }
 
-resources:
-  requests:
-    cpu: 100m
-    memory: 256Mi
-  limits:
-    cpu: "1"
-    memory: 1Gi
+# ---- Web UI component: serves the UI, injects serverUrl pointing at the api origin ----
+fe:
+  enabled: true
+  host: happy.example.com
+  tlsSecretName: ""                # default: <fullname>-fe-tls
+  serverUrl: ""                    # default: https://<api.host>
+  resources:
+    requests: { cpu: 50m,  memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
 
 # Image is arm64-only this iteration; pin scheduling to arm64 nodes unless `affinity` is set.
 nodeArch: arm64

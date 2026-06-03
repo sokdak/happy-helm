@@ -1,20 +1,24 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "happy.fullname" . }}
+  name: {{ include "happy.fullname" . }}-api
   labels:
     {{- include "happy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
 spec:
   replicas: 1
   strategy:
     type: Recreate
   selector:
     matchLabels:
-      {{- include "happy.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/name: {{ include "happy.fullname" . }}-api
+      app.kubernetes.io/instance: {{ .Release.Name }}
   template:
     metadata:
       labels:
-        {{- include "happy.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/name: {{ include "happy.fullname" . }}-api
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: api
     spec:
       {{- if .Values.affinity }}
       affinity:
@@ -50,19 +54,19 @@ spec:
         - name: happy
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          # Apply Prisma migrations to Postgres, then serve (UI + relay). DB_PROVIDER=postgres makes
-          # the server use DATABASE_URL (real Postgres) instead of embedded PGlite.
+          # Remove the bundled web UI so GET / returns the API welcome string, then migrate + serve.
           command: ["sh", "-c"]
           args:
             - >-
+              rm -rf /app/webapp &&
               node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma &&
               exec tsx --tsconfig tsconfig.json sources/standalone.ts serve
           ports:
             - name: http
-              containerPort: {{ .Values.server.port }}
+              containerPort: {{ .Values.port }}
           env:
             - name: PORT
-              value: {{ .Values.server.port | quote }}
+              value: {{ .Values.port | quote }}
             - name: HOST
               value: "0.0.0.0"
             - name: NODE_ENV
@@ -77,38 +81,79 @@ spec:
             - name: DATA_DIR
               value: "/data"
             - name: HAPPY_STATIC_DIR
-              value: "/app/webapp"
-            - name: HAPPY_INJECT_HTML_CONFIG
-              value: {{ printf "{\"serverUrl\":\"%s\"}" .Values.server.serverUrl | quote }}
+              value: ""               # disabled: api serves the API root, not the UI
             - name: HANDY_MASTER_SECRET
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.masterSecret.existingSecret | quote }}
                   key: {{ .Values.masterSecret.key | quote }}
-            {{- with .Values.server.extraEnv }}
-            {{- toYaml . | nindent 12 }}
-            {{- end }}
           livenessProbe:
-            httpGet:
-              path: /
-              port: http
+            httpGet: { path: /, port: http }
             initialDelaySeconds: 40
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
           readinessProbe:
-            httpGet:
-              path: /
-              port: http
+            httpGet: { path: /, port: http }
             initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 3
             failureThreshold: 6
           resources:
-            {{- toYaml .Values.resources | nindent 12 }}
+            {{- toYaml .Values.api.resources | nindent 12 }}
           volumeMounts:
             - name: data
               mountPath: /data
       volumes:
         - name: data
           emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "happy.fullname" . }}-api
+  labels:
+    {{- include "happy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "happy.fullname" . }}-api
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.port }}
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "happy.fullname" . }}-api
+  labels:
+    {{- include "happy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.proxyTimeoutSeconds | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.proxyTimeoutSeconds | quote }}
+    {{- if .Values.ingress.whitelistSourceRange }}
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ .Values.ingress.whitelistSourceRange | quote }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.api.host | quote }}
+      secretName: {{ .Values.api.tlsSecretName | default (printf "%s-api-tls" (include "happy.fullname" .)) | quote }}
+  rules:
+    - host: {{ .Values.api.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "happy.fullname" . }}-api
+                port:
+                  number: {{ .Values.port }}

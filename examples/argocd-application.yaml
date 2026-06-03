@@ -23,10 +23,10 @@ spec:
       values: |
         image:
           tag: "2026.06.03"
-        server:
-          serverUrl: https://happy.example.com
-        ingress:
-          host: happy.example.com
+        api:
+          host: api.happy.example.com    # GET / -> "Welcome to Happy Server!" (native-app custom server)
+        fe:
+          host: happy.example.com        # web UI; serverUrl auto-derives to https://<api.host>
         postgres:
           storageClass: ""   # set e.g. ceph-block/longhorn to pin
         database:

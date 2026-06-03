@@ -1,0 +1,163 @@
+{{- if .Values.fe.enabled }}
+{{- $serverUrl := .Values.fe.serverUrl | default (printf "https://%s" .Values.api.host) }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "happy.fullname" . }}-fe
+  labels:
+    {{- include "happy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fe
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ include "happy.fullname" . }}-fe
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ include "happy.fullname" . }}-fe
+        app.kubernetes.io/instance: {{ .Release.Name }}
+        app.kubernetes.io/component: fe
+    spec:
+      {{- if .Values.affinity }}
+      affinity:
+        {{- toYaml .Values.affinity | nindent 8 }}
+      {{- else if .Values.nodeArch }}
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: kubernetes.io/arch
+                    operator: In
+                    values: [{{ .Values.nodeArch | quote }}]
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        - name: wait-for-postgres
+          image: {{ .Values.postgres.image | quote }}
+          command:
+            - sh
+            - -c
+            - until pg_isready -h {{ include "happy.fullname" . }}-postgres -p 5432 -U {{ .Values.database.user }}; do echo "waiting for postgres..."; sleep 2; done
+      {{- end }}
+      containers:
+        - name: happy
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Serve the web UI; inject serverUrl so the UI talks to the api origin. (migrate is idempotent + locked.)
+          command: ["sh", "-c"]
+          args:
+            - >-
+              node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma &&
+              exec tsx --tsconfig tsconfig.json sources/standalone.ts serve
+          ports:
+            - name: http
+              containerPort: {{ .Values.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.port | quote }}
+            - name: HOST
+              value: "0.0.0.0"
+            - name: NODE_ENV
+              value: "production"
+            - name: DB_PROVIDER
+              value: {{ .Values.database.provider | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret | quote }}
+                  key: {{ .Values.database.urlKey | quote }}
+            - name: DATA_DIR
+              value: "/data"
+            - name: HAPPY_STATIC_DIR
+              value: "/app/webapp"
+            - name: HAPPY_INJECT_HTML_CONFIG
+              value: {{ printf "{\"serverUrl\":\"%s\"}" $serverUrl | quote }}
+            - name: HANDY_MASTER_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.masterSecret.existingSecret | quote }}
+                  key: {{ .Values.masterSecret.key | quote }}
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 40
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.fe.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "happy.fullname" . }}-fe
+  labels:
+    {{- include "happy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fe
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: {{ include "happy.fullname" . }}-fe
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: {{ .Values.port }}
+      targetPort: http
+      protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "happy.fullname" . }}-fe
+  labels:
+    {{- include "happy.labels" . | nindent 4 }}
+    app.kubernetes.io/component: fe
+  annotations:
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.proxyTimeoutSeconds | quote }}
+    nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.proxyTimeoutSeconds | quote }}
+    {{- if .Values.ingress.whitelistSourceRange }}
+    nginx.ingress.kubernetes.io/whitelist-source-range: {{ .Values.ingress.whitelistSourceRange | quote }}
+    {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts:
+        - {{ .Values.fe.host | quote }}
+      secretName: {{ .Values.fe.tlsSecretName | default (printf "%s-fe-tls" (include "happy.fullname" .)) | quote }}
+  rules:
+    - host: {{ .Values.fe.host | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "happy.fullname" . }}-fe
+                port:
+                  number: {{ .Values.port }}
+{{- end }}
