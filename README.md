@@ -1,8 +1,8 @@
 # happy-helm
 
-Helm chart to self-host [`slopus/happy`](https://github.com/slopus/happy) as a **single pod** on Kubernetes — control your machine's **Claude Code** and **Codex** sessions from a web UI (incl. phone).
+Helm chart to self-host [`slopus/happy`](https://github.com/slopus/happy) on Kubernetes — control your machine's **Claude Code** and **Codex** sessions from a web UI (incl. phone).
 
-One arm64 image runs `happy-server` in **standalone mode** (embedded PGlite — no Redis/Postgres/S3) and serves the Expo **web UI** on the same origin. End-to-end encrypted; the CLI dials out to the relay.
+One arm64 image serves the Expo **web UI** + the `happy-server` relay on the same origin, backed by **PostgreSQL** (bundled). End-to-end encrypted; the CLI dials out to the relay. (The server also has an embedded-PGlite mode, but it has Prisma `Bytes`/enum bugs that break machine/session listing — use Postgres.)
 
 ## Build & push the image
 
@@ -12,14 +12,22 @@ TAG=$(date +%Y.%m.%d) PUSH=true ./docker/build.sh   # requires `docker login` to
 
 Builds `linux/arm64` and pushes `docker.io/sokdak/happy:<TAG>` + `:latest`. Pin the upstream happy version via `HAPPY_REF` (see `docker/Dockerfile`). Omit `PUSH=true` (or set `PUSH=false`) to build and `--load` locally for testing.
 
-## One-time secret (GitOps-safe)
+## One-time secrets (GitOps-safe)
 
-`HANDY_MASTER_SECRET` signs auth tokens — create it once, out of band; never commit it.
+Create these once, out of band; never commit them.
 
 ```bash
 kubectl create namespace happy
+
+# Master secret (signs auth tokens)
 kubectl -n happy create secret generic happy-secrets \
   --from-literal=HANDY_MASTER_SECRET=$(openssl rand -hex 32)
+
+# Postgres credentials (URL-safe password) + connection URL
+PW=$(openssl rand -hex 24)
+kubectl -n happy create secret generic happy-postgres \
+  --from-literal=password="$PW" \
+  --from-literal=database-url="postgresql://happy:${PW}@happy-postgres:5432/happy?schema=public"
 ```
 
 ## Install
@@ -29,7 +37,7 @@ helm upgrade --install happy . -n happy --create-namespace \
   --set image.tag=<TAG>
 ```
 
-Key values (see `values.yaml`): `image.tag`, `server.serverUrl`, `ingress.host`, `ingress.clusterIssuer`, `ingress.tlsSecretName`, `ingress.whitelistSourceRange`, `persistence.storageClass`/`size`, `masterSecret.existingSecret`.
+Key values (see `values.yaml`): `image.tag`, `server.serverUrl`, `ingress.host`, `ingress.clusterIssuer`, `ingress.tlsSecretName`, `ingress.whitelistSourceRange`, `postgres.enabled`/`storageClass`/`size`, `database.existingSecret`, `masterSecret.existingSecret`.
 
 An example ArgoCD Application for GitOps deployment is in `examples/argocd-application.yaml`.
 
@@ -38,11 +46,13 @@ An example ArgoCD Application for GitOps deployment is in `examples/argocd-appli
 ```bash
 npm install -g happy
 export HAPPY_SERVER_URL="https://happy.example.com"
+export HAPPY_WEBAPP_URL="https://happy.example.com"   # same origin serves the UI; needed for web-browser auth
+happy auth login    # → Web Browser → approve in the browser (init the account there first)
 happy claude        # or: happy codex
-happy daemon start  # optional: keep the machine available to start sessions remotely
+happy daemon start  # keep the machine online so it appears in the UI machine list
 ```
 
-First run: open the UI, pair via QR/link (no password). Then drive Claude/Codex from your phone; press any key on the computer to take control back.
+First run: open the UI at your `serverUrl`, create the account (master secret stays in the browser), then `happy auth login` → approve. Then drive Claude/Codex from your phone; press any key on the computer to take control back.
 
 ## Security
 

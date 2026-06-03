@@ -14,6 +14,28 @@ server:
   port: 3005
   extraEnv: []           # e.g. - {name: ELEVENLABS_API_KEY, value: "xxx"}
 
+# Database backing the server.
+#   provider: "postgres" (recommended) — uses a real PostgreSQL (handles Bytes/enum columns correctly).
+#   provider: "pglite"   — embedded, but has Prisma Bytes/enum deserialization bugs that break
+#                          machine/session listing. Not recommended.
+database:
+  provider: postgres
+  existingSecret: happy-postgres   # holds the connection URL + postgres password (create out-of-band)
+  urlKey: database-url             # key: postgresql://user:pass@<release>-postgres:5432/db?schema=public
+  passwordKey: password            # key: the postgres password (for the bundled Postgres)
+  user: happy
+  name: happy
+
+# Bundled PostgreSQL (set enabled: false to use an external DB referenced only via database.existingSecret).
+postgres:
+  enabled: true
+  image: postgres:16-alpine
+  storageClass: ""                 # "" = cluster default StorageClass
+  size: 5Gi
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: "1",  memory: 1Gi }
+
 ingress:
   enabled: true
   className: nginx
@@ -22,12 +44,6 @@ ingress:
   tlsSecretName: happy-tls
   whitelistSourceRange: ""        # optional CIDR allowlist, e.g. "10.0.0.0/8"
   proxyTimeoutSeconds: 3600       # long-lived WebSocket
-
-persistence:
-  enabled: true
-  storageClass: ""                # "" = cluster default StorageClass (set e.g. ceph-block/longhorn to pin)
-  size: 2Gi
-  mountPath: /data
 
 # HANDY_MASTER_SECRET must be created out-of-band (GitOps-safe; never commit it).
 masterSecret:

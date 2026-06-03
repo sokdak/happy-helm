@@ -37,10 +37,26 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      {{- if .Values.postgres.enabled }}
+      initContainers:
+        - name: wait-for-postgres
+          image: {{ .Values.postgres.image | quote }}
+          command:
+            - sh
+            - -c
+            - until pg_isready -h {{ include "happy.fullname" . }}-postgres -p 5432 -U {{ .Values.database.user }}; do echo "waiting for postgres..."; sleep 2; done
+      {{- end }}
       containers:
         - name: happy
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          # Apply Prisma migrations to Postgres, then serve (UI + relay). DB_PROVIDER=postgres makes
+          # the server use DATABASE_URL (real Postgres) instead of embedded PGlite.
+          command: ["sh", "-c"]
+          args:
+            - >-
+              node_modules/.bin/prisma migrate deploy --schema prisma/schema.prisma &&
+              exec tsx --tsconfig tsconfig.json sources/standalone.ts serve
           ports:
             - name: http
               containerPort: {{ .Values.server.port }}
@@ -51,12 +67,17 @@ spec:
               value: "0.0.0.0"
             - name: NODE_ENV
               value: "production"
+            - name: DB_PROVIDER
+              value: {{ .Values.database.provider | quote }}
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.existingSecret | quote }}
+                  key: {{ .Values.database.urlKey | quote }}
             - name: DATA_DIR
-              value: {{ .Values.persistence.mountPath | quote }}
-            - name: PGLITE_DIR
-              value: {{ printf "%s/pglite" .Values.persistence.mountPath | quote }}
+              value: "/data"
             - name: HAPPY_STATIC_DIR
-              value: "/repo/packages/happy-server/webapp"
+              value: "/app/webapp"
             - name: HAPPY_INJECT_HTML_CONFIG
               value: {{ printf "{\"serverUrl\":\"%s\"}" .Values.server.serverUrl | quote }}
             - name: HANDY_MASTER_SECRET
@@ -71,7 +92,7 @@ spec:
             httpGet:
               path: /
               port: http
-            initialDelaySeconds: 30
+            initialDelaySeconds: 40
             periodSeconds: 10
             timeoutSeconds: 5
             failureThreshold: 3
@@ -79,20 +100,15 @@ spec:
             httpGet:
               path: /
               port: http
-            initialDelaySeconds: 5
+            initialDelaySeconds: 10
             periodSeconds: 5
             timeoutSeconds: 3
-            failureThreshold: 3
+            failureThreshold: 6
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
           volumeMounts:
             - name: data
-              mountPath: {{ .Values.persistence.mountPath | quote }}
+              mountPath: /data
       volumes:
         - name: data
-          {{- if .Values.persistence.enabled }}
-          persistentVolumeClaim:
-            claimName: {{ include "happy.fullname" . }}-data
-          {{- else }}
           emptyDir: {}
-          {{- end }}

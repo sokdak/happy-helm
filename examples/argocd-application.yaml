@@ -1,5 +1,10 @@
 # Example ArgoCD Application that deploys this chart via GitOps.
-# Adjust namespace, host/serverUrl, storageClass, project, and the secret name for your cluster.
+# Adjust namespace, host/serverUrl, postgres.storageClass, project, and the secrets for your cluster.
+# Prereqs (create out-of-band, never commit):
+#   kubectl -n happy create secret generic happy-secrets  --from-literal=HANDY_MASTER_SECRET=$(openssl rand -hex 32)
+#   PW=$(openssl rand -hex 24); kubectl -n happy create secret generic happy-postgres \
+#     --from-literal=password="$PW" \
+#     --from-literal=database-url="postgresql://happy:${PW}@happy-postgres:5432/happy?schema=public"
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -22,8 +27,10 @@ spec:
           serverUrl: https://happy.example.com
         ingress:
           host: happy.example.com
-        # persistence:
-        #   storageClass: ceph-block   # pin if your cluster needs a specific class
+        postgres:
+          storageClass: ""   # set e.g. ceph-block/longhorn to pin
+        database:
+          existingSecret: happy-postgres
         masterSecret:
           existingSecret: happy-secrets
   syncPolicy:
