@@ -6,10 +6,12 @@
 # which drops happy-app's Expo/React-Native dependency tree (the bulk of the image). The server
 # runs from TS source via `tsx`, which resolves the `@/*` tsconfig path aliases and handles the
 # ESM<->CJS interop (e.g. @prisma/client named imports) that an ESM bundle cannot.
-ARG HAPPY_REF=e10e51979143f4ffa9ead16c210af72c9864ac80
+ARG HAPPY_REPO=https://github.com/sokdak/happy.git
+ARG HAPPY_REF=241c9f0bfbd658255453730d5f390215e0c2cc62
 
 # ---- Stage 1: clone source, install deps, build web UI, deploy prod server ----
 FROM node:20 AS builder
+ARG HAPPY_REPO
 ARG HAPPY_REF
 RUN apt-get update && apt-get install -y python3 make g++ build-essential git \
     && rm -rf /var/lib/apt/lists/*
@@ -17,7 +19,7 @@ RUN corepack enable && corepack prepare pnpm@10.11.0 --activate
 WORKDIR /repo
 # Shallow-fetch the exact ref (commit SHA, tag, or branch). GitHub supports fetch-by-SHA.
 RUN git init -q . \
- && git remote add origin https://github.com/slopus/happy.git \
+ && git remote add origin "${HAPPY_REPO}" \
  && git fetch --depth 1 origin "${HAPPY_REF}" \
  && git checkout -q FETCH_HEAD
 # Hoisted install (repo default). Skip the happy-wire postinstall build; build it explicitly next.
