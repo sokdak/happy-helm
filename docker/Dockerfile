@@ -7,7 +7,7 @@
 # runs from TS source via `tsx`, which resolves the `@/*` tsconfig path aliases and handles the
 # ESM<->CJS interop (e.g. @prisma/client named imports) that an ESM bundle cannot.
 ARG HAPPY_REPO=https://github.com/sokdak/happy.git
-ARG HAPPY_REF=241c9f0bfbd658255453730d5f390215e0c2cc62
+ARG HAPPY_REF=0ec4bafef47df36ccec060b723e64016492fcb9a
 
 # ---- Stage 1: clone source, install deps, build web UI, deploy prod server ----
 FROM node:20 AS builder

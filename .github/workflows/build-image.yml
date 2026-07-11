@@ -1,0 +1,82 @@
+# Builds the arm64 happy image (docker/Dockerfile) on a native arm64 runner.
+# Always pushes to ghcr.io/<owner>/happy with the GITHUB_TOKEN; additionally
+# pushes to docker.io/sokdak/happy when DOCKERHUB_USERNAME/DOCKERHUB_TOKEN
+# repo secrets are configured (same tags on both registries).
+name: build-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Image tag (e.g. 2026.07.11). Empty = UTC date.'
+        required: false
+        default: ''
+      happy_ref:
+        description: 'sokdak/happy ref to build. Empty = pin from docker/build.sh.'
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Resolve tag, ref and registries
+        id: params
+        env:
+          INPUT_TAG: ${{ inputs.tag }}
+          INPUT_REF: ${{ inputs.happy_ref }}
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          TAG="${INPUT_TAG:-$(date -u +%Y.%m.%d)}"
+          REF="${INPUT_REF:-$(sed -n 's/^HAPPY_REF="\${HAPPY_REF:-\([^}]*\)}".*/\1/p' docker/build.sh)}"
+          [ -n "$REF" ] || { echo "could not resolve HAPPY_REF from docker/build.sh" >&2; exit 1; }
+          TAGS="ghcr.io/${{ github.repository_owner }}/happy:${TAG},ghcr.io/${{ github.repository_owner }}/happy:latest"
+          if [ -n "$DOCKERHUB_USERNAME" ] && [ -n "$DOCKERHUB_TOKEN" ]; then
+            TAGS="${TAGS},docker.io/sokdak/happy:${TAG},docker.io/sokdak/happy:latest"
+            echo "dockerhub=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets not set — pushing to GHCR only" >&2
+            echo "dockerhub=false" >> "$GITHUB_OUTPUT"
+          fi
+          echo "tag=$TAG"   >> "$GITHUB_OUTPUT"
+          echo "ref=$REF"   >> "$GITHUB_OUTPUT"
+          echo "tags=$TAGS" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Login to Docker Hub
+        if: steps.params.outputs.dockerhub == 'true'
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build and push (linux/arm64)
+        uses: docker/build-push-action@v6
+        with:
+          context: docker
+          platforms: linux/arm64
+          push: true
+          build-args: |
+            HAPPY_REPO=https://github.com/sokdak/happy.git
+            HAPPY_REF=${{ steps.params.outputs.ref }}
+          tags: ${{ steps.params.outputs.tags }}
+
+      - name: Summary
+        run: |
+          echo "Built sokdak/happy @ ${{ steps.params.outputs.ref }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "Tags: ${{ steps.params.outputs.tags }}" >> "$GITHUB_STEP_SUMMARY"

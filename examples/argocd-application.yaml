@@ -22,7 +22,7 @@ spec:
     helm:
       values: |
         image:
-          tag: "2026.06.11"
+          tag: "2026.07.11"
         api:
           host: api.happy.example.com    # GET / -> "Welcome to Happy Server!" (native-app custom server)
         fe:
