@@ -43,8 +43,14 @@ An example ArgoCD Application for GitOps deployment is in `examples/argocd-appli
 
 ## Use it from your computer
 
+> ⚠️ **Use the fork CLI built together with this image.** The image and the npm package
+> [`@sokdak/happy`](https://www.npmjs.com/package/@sokdak/happy) are built from the same
+> `sokdak/happy` source commit (`HAPPY_REF`) and must be used together to work correctly —
+> the upstream `happy` npm package is **not** compatible with this image's fork-specific
+> features (antigravity Claude modes, `agy` backend, permission behavior).
+
 ```bash
-npm install -g happy
+npm install -g @sokdak/happy
 export HAPPY_SERVER_URL="https://api.happy.example.com"   # api origin (relay)
 export HAPPY_WEBAPP_URL="https://happy.example.com"       # fe origin (web UI); needed for web-browser auth
 happy auth login    # → Web Browser → approve in the browser (init the account there first)
