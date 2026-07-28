@@ -1,69 +1,59 @@
 nameOverride: ""
 fullnameOverride: ""
-
 # Image built from docker/Dockerfile, pushed to Docker Hub (public).
 image:
-  repository: docker.io/sokdak/happy
-  tag: latest            # override per release, e.g. "2026.06.03"
+  repository: ghcr.io/sokdak/happy
+  tag: 2026.07.28 # override per release, e.g. "2026.06.03"
   pullPolicy: IfNotPresent
-
 # Split-origin deployment (two hosts, same image, shared Postgres):
 #   - api: happy-server relay. Removes the bundled web UI at startup so GET / returns
 #          "Welcome to Happy Server!" — required for native/App-Store apps to register it
 #          as a custom server. Runs `prisma migrate deploy`.
 #   - fe : serves the web UI (static), with the server URL injected to point at the api origin.
 # The browser/CLI talk to the api origin; the fe pod only serves UI (server CORS is `*`).
-
 port: 3005
-
 # HANDY_MASTER_SECRET (token signing / per-machine key derivation) — created out-of-band, never committed.
 masterSecret:
   existingSecret: happy-secrets
   key: HANDY_MASTER_SECRET
-
 # Database (real PostgreSQL — PGlite has Prisma Bytes/enum bugs that break machine/session listing).
 database:
   provider: postgres
-  existingSecret: happy-postgres   # holds database-url + password (create out-of-band)
-  urlKey: database-url             # postgresql://happy:<pw>@<release>-postgres:5432/happy?schema=public
+  existingSecret: happy-postgres # holds database-url + password (create out-of-band)
+  urlKey: database-url # postgresql://happy:<pw>@<release>-postgres:5432/happy?schema=public
   passwordKey: password
   user: happy
   name: happy
-
 # Bundled PostgreSQL (set enabled: false to use an external DB referenced only via database.existingSecret).
 postgres:
   enabled: true
   image: postgres:16-alpine
-  storageClass: ""                 # "" = cluster default StorageClass
+  storageClass: "" # "" = cluster default StorageClass
   size: 5Gi
   resources:
-    requests: { cpu: 100m, memory: 256Mi }
-    limits:   { cpu: "1",  memory: 1Gi }
-
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
 ingress:
   className: nginx
   clusterIssuer: letsencrypt-prod
-  whitelistSourceRange: ""         # optional CIDR allowlist, e.g. "10.0.0.0/8"
-  proxyTimeoutSeconds: 3600        # long-lived WebSocket
-
+  whitelistSourceRange: "" # optional CIDR allowlist, e.g. "10.0.0.0/8"
+  proxyTimeoutSeconds: 3600 # long-lived WebSocket
 # ---- API / relay component: GET / -> "Welcome to Happy Server!" (NO web UI) ----
 api:
   host: api.happy.example.com
-  tlsSecretName: ""                # default: <fullname>-api-tls
+  tlsSecretName: "" # default: <fullname>-api-tls
   resources:
-    requests: { cpu: 100m, memory: 256Mi }
-    limits:   { cpu: "1",  memory: 1Gi }
-
+    requests: {cpu: 100m, memory: 256Mi}
+    limits: {cpu: "1", memory: 1Gi}
 # ---- Web UI component: serves the UI, injects serverUrl pointing at the api origin ----
 fe:
   enabled: true
   host: happy.example.com
-  tlsSecretName: ""                # default: <fullname>-fe-tls
-  serverUrl: ""                    # default: https://<api.host>
+  tlsSecretName: "" # default: <fullname>-fe-tls
+  serverUrl: "" # default: https://<api.host>
   resources:
-    requests: { cpu: 50m,  memory: 128Mi }
-    limits:   { cpu: 500m, memory: 512Mi }
-
+    requests: {cpu: 50m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
 # Image is arm64-only this iteration; pin scheduling to arm64 nodes unless `affinity` is set.
 nodeArch: arm64
 nodeSelector: {}
