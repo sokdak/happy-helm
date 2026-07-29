@@ -4,7 +4,7 @@ description: Self-hosted happy (slopus/happy) — single-pod relay + web UI to c
 type: application
 version: 0.1.0
 # appVersion tracks the happy release pinned by the image (HAPPY_REF in docker/Dockerfile); bump per release.
-appVersion: "2026.07.29-7-8d1e52cd859f"
+appVersion: "2026.07.29-8-d3455020ce3d"
 home: https://github.com/sokdak/happy-helm
 sources:
   - https://github.com/slopus/happy
