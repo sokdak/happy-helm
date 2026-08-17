@@ -3,7 +3,7 @@ fullnameOverride: ""
 # Image built from docker/Dockerfile, pushed to Docker Hub (public).
 image:
   repository: ghcr.io/sokdak/happy
-  tag: 2026.08.08-12-9a0fe433de8c # override per release, e.g. "2026.06.03"
+  tag: 2026.08.17-17-26d445af1f70 # override per release, e.g. "2026.06.03"
   pullPolicy: IfNotPresent
 # Split-origin deployment (two hosts, same image, shared Postgres):
 #   - api: happy-server relay. Removes the bundled web UI at startup so GET / returns
