@@ -75,10 +75,19 @@ Both accept a comma- or space-separated list of `claude`, `codex`, `gemini`, `op
 `agy`. `HAPPY_ENABLED_AGENTS` takes precedence. Neither can make a missing CLI usable —
 what is installed still has the final say.
 
+A name outside that list is a configuration error, not a no-op: the daemon reports no
+agents at all and refuses to start a session, naming the value it could not read. A typo
+used to parse away to an empty policy, which read as "no policy" and re-enabled every
+agent found on the machine — the opposite of what was asked for.
+
 The web UI builds its agent picker from what the daemon reports, so a disabled agent
 disappears from the picker and the first enabled one becomes the default for new sessions.
 A browser still holding an older `agent: "claude"` draft is coerced to an enabled agent
-rather than failing.
+rather than failing. Coercion also drops the parts of that request that belonged to the
+agent it named — the OAuth token, model, permission mode and resume id — because none of
+them translate: a Claude token is not a Codex credential and `claude-opus-5` is not a
+model Codex can run. The session starts from the target agent's own credential and
+defaults instead.
 
 This matters when an agent CLI is installed but deliberately **not** authenticated: without
 the policy the daemon advertises it as available, and every request fails with
@@ -87,7 +96,21 @@ in the same place as `HAPPY_SERVER_URL` above — and prefer a location the daem
 restart, since a daemon outlives the shell that started it.
 
 Requires a CLI built from a source commit that includes the agent policy
-(sokdak/happy#12); older builds ignore both variables.
+(sokdak/happy#12); older builds ignore both variables. The coercion, typo and precedence
+behaviour described above landed later, in sokdak/happy#14.
+
+### Log retention on the daemon host
+
+The daemon writes one log file per process start under `~/.happy/logs`, and for a long
+time nothing removed them — a host running the daemon under systemd for three months
+accumulated 204k files and 924MB. Builds including sokdak/happy#15 prune on start:
+
+```bash
+export HAPPY_LOG_RETENTION_DAYS=14   # default; 0 keeps everything
+```
+
+Deletion runs in the background, oldest first, so an existing backlog clears on the next
+start. `happy doctor` reports the current file count, total size and retention window.
 
 ## Security
 
