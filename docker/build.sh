@@ -3,7 +3,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 HAPPY_REPO="${HAPPY_REPO:-https://github.com/sokdak/happy.git}"       # source repo (fork with local customizations)
-HAPPY_REF="${HAPPY_REF:-899797b41f1520c893a0d2bec57833d50455d828}"   # pinned sokdak/happy feature/antigravity-vnext SHA (2026-07-11, antigravity Claude refresh + agy backend + GPT-5.6 picker)
+HAPPY_REF="${HAPPY_REF:-f28f087802130c886921aa95b379736899e1d92a}"   # pinned sokdak/happy feature/antigravity-vnext SHA (2026-07-11, antigravity Claude refresh + agy backend + GPT-5.6 picker)
 IMAGE="${IMAGE:-ghcr.io/sokdak/happy}"
 TAG="${TAG:?set TAG, e.g. TAG=2026.06.02}"
 PLATFORM="${PLATFORM:-linux/arm64}"
