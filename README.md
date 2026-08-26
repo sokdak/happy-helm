@@ -60,6 +60,35 @@ happy daemon start  # keep the machine online so it appears in the UI machine li
 
 First run: open the UI (the `fe` host), create the account (master secret stays in the browser), then `happy auth login` → approve. Then drive Claude/Codex from your phone; press any key on the computer to take control back.
 
+### Run a subset of agents (e.g. Codex-only)
+
+Agent selection happens in the daemon on **your** machine, not in the cluster. This chart
+deploys only the relay, the web UI, and Postgres — its image ships no agent CLI — so there
+is no chart value for this. Configure it where the daemon runs:
+
+```bash
+export HAPPY_ENABLED_AGENTS=codex      # allowlist; or: HAPPY_DISABLED_AGENTS=claude
+happy daemon start
+```
+
+Both accept a comma- or space-separated list of `claude`, `codex`, `gemini`, `openclaw`,
+`agy`. `HAPPY_ENABLED_AGENTS` takes precedence. Neither can make a missing CLI usable —
+what is installed still has the final say.
+
+The web UI builds its agent picker from what the daemon reports, so a disabled agent
+disappears from the picker and the first enabled one becomes the default for new sessions.
+A browser still holding an older `agent: "claude"` draft is coerced to an enabled agent
+rather than failing.
+
+This matters when an agent CLI is installed but deliberately **not** authenticated: without
+the policy the daemon advertises it as available, and every request fails with
+`Failed to authenticate: OAuth session expired and could not be refreshed`. Set the policy
+in the same place as `HAPPY_SERVER_URL` above — and prefer a location the daemon inherits on
+restart, since a daemon outlives the shell that started it.
+
+Requires a CLI built from a source commit that includes the agent policy
+(sokdak/happy#12); older builds ignore both variables.
+
 ## Security
 
 The relay allows open account registration (data stays end-to-end encrypted and per-key isolated). Keep it behind your network perimeter, or set `ingress.whitelistSourceRange` to an allowed CIDR.
