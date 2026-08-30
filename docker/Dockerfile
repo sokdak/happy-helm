@@ -30,8 +30,15 @@ RUN pnpm --filter happy-app exec expo export --platform web --output-dir dist
 # Production-only deployment of the server: drops happy-app's deps, injects the built
 # @slopus/happy-wire workspace dep, and runs `prisma generate` via the package postinstall.
 # Try the modern deploy; fall back to --legacy for workspaces without inject-workspace-packages.
-RUN pnpm --filter happy-server-self-host deploy --prod /deploy \
- || { rm -rf /deploy; pnpm --filter happy-server-self-host deploy --prod --legacy /deploy; }
+#
+# Filter by `happy-server` — the package whose `sources/` this image actually runs (copied
+# below). This used to say `happy-server-self-host` back when that was the same package's
+# name; upstream has since split off a separate launcher package under that name. The two
+# currently declare identical dependencies, so the old filter still produced a working
+# node_modules, but only by coincidence: any drift in the launcher's deps would have
+# silently shipped an image missing something the server needs.
+RUN pnpm --filter happy-server deploy --prod /deploy \
+ || { rm -rf /deploy; pnpm --filter happy-server deploy --prod --legacy /deploy; }
 # pnpm's isolated deploy layout leaves an incomplete generated Prisma client: @prisma/client
 # re-exports `.prisma/client/default`, but the deploy tree's `.prisma/client` lacks the schema's
 # enums (e.g. RelationshipStatus) → ESM named imports fail. Overlay the fully-generated client
