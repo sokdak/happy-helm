@@ -3,7 +3,7 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 
 HAPPY_REPO="${HAPPY_REPO:-https://github.com/sokdak/happy.git}"       # source repo (fork with local customizations)
-HAPPY_REF="${HAPPY_REF:-28eb4ce8b95558b5993f823c63788649b1b34fc5}"   # pinned sokdak/happy main SHA; the bump automation rewrites only the SHA above, so keep this comment generic
+HAPPY_REF="${HAPPY_REF:-23c7a6118df3b0872e885bd8fe1c673c360cf6bd}"   # pinned sokdak/happy main SHA; the bump automation rewrites only the SHA above, so keep this comment generic
 IMAGE="${IMAGE:-ghcr.io/sokdak/happy}"
 TAG="${TAG:?set TAG, e.g. TAG=2026.06.02}"
 PLATFORM="${PLATFORM:-linux/arm64}"
