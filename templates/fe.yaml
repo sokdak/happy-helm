@@ -136,19 +136,30 @@ metadata:
   labels:
     {{- include "happy.labels" . | nindent 4 }}
     app.kubernetes.io/component: fe
+  {{- if or .Values.ingress.clusterIssuer (eq .Values.ingress.className "nginx") .Values.ingress.annotations }}
   annotations:
+    {{- if .Values.ingress.clusterIssuer }}
     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    {{- end }}
+    {{- if eq .Values.ingress.className "nginx" }}
     nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.proxyTimeoutSeconds | quote }}
     nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.proxyTimeoutSeconds | quote }}
     {{- if .Values.ingress.whitelistSourceRange }}
     nginx.ingress.kubernetes.io/whitelist-source-range: {{ .Values.ingress.whitelistSourceRange | quote }}
     {{- end }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
         - {{ .Values.fe.host | quote }}
       secretName: {{ .Values.fe.tlsSecretName | default (printf "%s-fe-tls" (include "happy.fullname" .)) | quote }}
+  {{- end }}
   rules:
     - host: {{ .Values.fe.host | quote }}
       http:
