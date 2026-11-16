@@ -25,8 +25,8 @@ RUN git init -q . \
 # Hoisted install (repo default). Skip the happy-wire postinstall build; build it explicitly next.
 RUN SKIP_HAPPY_WIRE_BUILD=1 pnpm install --frozen-lockfile
 RUN pnpm --filter @slopus/happy-wire build
-# Export the web UI to packages/happy-app/dist
-RUN pnpm --filter happy-app exec expo export --platform web --output-dir dist
+# Export the web UI to packages/happy-app/dist (production variant so title/config are production)
+RUN APP_ENV=production pnpm --filter happy-app exec expo export --platform web --output-dir dist
 # Production-only deployment of the server: drops happy-app's deps, injects the built
 # @slopus/happy-wire workspace dep, and runs `prisma generate` via the package postinstall.
 # Try the modern deploy; fall back to --legacy for workspaces without inject-workspace-packages.
