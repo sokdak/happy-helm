@@ -35,7 +35,11 @@ postgres:
     limits: {cpu: "1", memory: 1Gi}
 ingress:
   className: nginx
+  # Leave empty when TLS is terminated by an upstream reverse proxy.
   clusterIssuer: letsencrypt-prod
+  tls:
+    enabled: true
+  annotations: {}
   whitelistSourceRange: "" # optional CIDR allowlist, e.g. "10.0.0.0/8"
   proxyTimeoutSeconds: 3600 # long-lived WebSocket
 # ---- API / relay component: GET / -> "Welcome to Happy Server!" (NO web UI) ----

@@ -82,6 +82,8 @@ spec:
               value: "/data"
             - name: HAPPY_STATIC_DIR
               value: ""               # disabled: api serves the API root, not the UI
+            - name: PUBLIC_URL
+              value: {{ .Values.api.publicUrl | default (.Values.fe.serverUrl | default (printf "https://%s" .Values.api.host)) | quote }}
             - name: HANDY_MASTER_SECRET
               valueFrom:
                 secretKeyRef:
@@ -133,19 +135,30 @@ metadata:
   labels:
     {{- include "happy.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
+  {{- if or .Values.ingress.clusterIssuer (eq .Values.ingress.className "nginx") .Values.ingress.annotations }}
   annotations:
+    {{- if .Values.ingress.clusterIssuer }}
     cert-manager.io/cluster-issuer: {{ .Values.ingress.clusterIssuer | quote }}
+    {{- end }}
+    {{- if eq .Values.ingress.className "nginx" }}
     nginx.ingress.kubernetes.io/proxy-read-timeout: {{ .Values.ingress.proxyTimeoutSeconds | quote }}
     nginx.ingress.kubernetes.io/proxy-send-timeout: {{ .Values.ingress.proxyTimeoutSeconds | quote }}
     {{- if .Values.ingress.whitelistSourceRange }}
     nginx.ingress.kubernetes.io/whitelist-source-range: {{ .Values.ingress.whitelistSourceRange | quote }}
     {{- end }}
+    {{- end }}
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- end }}
 spec:
   ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
   tls:
     - hosts:
         - {{ .Values.api.host | quote }}
       secretName: {{ .Values.api.tlsSecretName | default (printf "%s-api-tls" (include "happy.fullname" .)) | quote }}
+  {{- end }}
   rules:
     - host: {{ .Values.api.host | quote }}
       http:

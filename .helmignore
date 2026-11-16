@@ -8,3 +8,5 @@ examples/
 *.md
 /tmp/
 .DS_Store
+.codegraph
+
